@@ -26,7 +26,7 @@ def setup_logger(name: str = None) -> logging.Logger:
     
     # 創建彩色格式化器
     color_formatter = colorlog.ColoredFormatter(
-        "%(blue)s%(asctime)s%(reset)s - %(yellow)s%(name)s%(reset)s - %(log_color)s%(levelname)s%(reset)s - %(message_log_color)s%(message)s",
+        "%(blue)s%(asctime)s%(reset)s - %(yellow)s[%(filename)s:%(lineno)d]%(reset)s - %(log_color)s%(levelname)s%(reset)s - %(message_log_color)s%(message)s",
         datefmt="%Y-%m-%d %H:%M:%S",
         log_colors={
             'DEBUG': 'cyan',
@@ -73,7 +73,7 @@ def setup_main_logger() -> logging.Logger:
         root_logger.removeHandler(handler)
     
     # 設定日誌等級
-    root_logger.setLevel(logging.INFO)
+    root_logger.setLevel(logging.DEBUG)
     
     # 創建以當前時間為名的日誌檔案
     current_time = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -90,7 +90,7 @@ def setup_main_logger() -> logging.Logger:
     # 創建彩色控制台處理器
     console_handler = colorlog.StreamHandler()
     color_formatter = colorlog.ColoredFormatter(
-        "%(blue)s%(asctime)s%(reset)s - %(yellow)s%(name)s%(reset)s - %(log_color)s%(levelname)s%(reset)s - %(message_log_color)s%(message)s",
+        "%(blue)s%(asctime)s%(reset)s - %(yellow)s[%(filename)s:%(lineno)d]%(reset)s - %(log_color)s%(levelname)s%(reset)s - %(message_log_color)s%(message)s",
         datefmt="%Y-%m-%d %H:%M:%S",
         log_colors={
             'DEBUG': 'cyan',
