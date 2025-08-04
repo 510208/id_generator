@@ -1,0 +1,71 @@
+# 證件基本資料
+id: "sample-passport" # 證件唯一ID（可作為輸出檔名）
+country: "自由共和國" # 發行國名稱
+version: "1.0" # 配置版本
+layout: "horizontal" # 版面配置: horizontal | vertical | booklet
+
+# 背景設計與樣式
+background:
+  image: "assets/passport-bg.png" # 背景圖檔路徑
+  color: "#f4f4f4" # 預設底色（可為 backup）
+  margin: 20 # 頁面邊距（單位 px）
+
+# 欄位定義區（字段與資料綁定）
+fields:
+  - key: "name"
+    label: "姓名"
+    position: [100, 150] # x, y 座標
+    font_size: 18
+    font_color: "#000"
+    font_family: "Noto Sans TC"
+    required: true
+    data_path: "user.name"
+
+  - key: "nationality"
+    label: "國籍"
+    position: [100, 200]
+    font_size: 14
+    data_path: "user.nationality"
+
+  - key: "id_number"
+    label: "證件號碼"
+    position: [300, 150]
+    font_size: 14
+    font_color: "#444"
+    data_path: "document.id"
+
+  - key: "photo"
+    type: "image"
+    position: [500, 100]
+    size: [120, 160]
+    data_path: "user.photo"
+
+# 靜態元素（如章、簽章、LOGO）
+overlays:
+  - type: "image"
+    src: "assets/seal.png"
+    position: [600, 300]
+    size: [80, 80]
+    opacity: 0.5
+
+  - type: "text"
+    content: "REPUBLIC OF LIBERTY"
+    position: [100, 50]
+    font_size: 12
+    font_style: italic
+    font_color: "#999"
+
+# 安全元素或特效（可選）
+security:
+  hologram: true
+  watermark:
+    text: "MICRONATION"
+    opacity: 0.1
+    repeat: true
+
+# 輸出格式
+output:
+  format: "PNG" # PNG | PDF | SVG
+  dpi: 300
+  save_to: "output/" # 輸出目錄
+  filename_format: "{user.name}_{document.id}.png"
