@@ -1,31 +1,28 @@
 from pathlib import Path
-from typing import List, Literal, Optional, Tuple
-from pydantic import BaseModel, DirectoryPath, field_validator
+from typing import List, Literal, Optional, Tuple, Union
+from pydantic import BaseModel, DirectoryPath, field_validator, model_validator
 
 from .validators import validate_color_format, validate_font_family
 
 class FieldDefinition(BaseModel):
     """
-    欄位定義模型
+    欄位定義模型（支援日期欄位的多位置）
 
-    :param key: 欄位鍵
-    :param type: 欄位類型 (text, number, date, barcode)
-    :param position: 欄位位置 (x, y)
-    :param font_size: 字體大小
-    :param font_color: 字體顏色
-    :param font_family: 字體名稱
-    :param size: 條碼大小 (寬, 高)
-    :param data_path: 資料路徑 (對應 CSV 欄位)
-    :raises ValueError: 如果字體顏色格式不正確，則拋出此錯誤
-    :raises ValueError: 如果字體名稱不正確，則拋出此錯誤
+    - 若 type 為 "date"，position 可為 List[Tuple[float, float]]
+    - 否則為單一 Tuple[float, float]
     """
+
     key: str
     type: Literal["text", "number", "date", "barcode"]
-    position: Tuple[float, float]
+    position: Union[
+        Tuple[float, float],
+        List[Tuple[float, float]]
+    ]
     font_size: Optional[int] = None
     font_color: Optional[str] = None
     font_family: Optional[str] = None
     size: Optional[Tuple[int, int]] = None
+    date_format: str = "%Y/%m/%d"
     data_path: str
 
     @field_validator("font_color", mode="after")
@@ -37,6 +34,18 @@ class FieldDefinition(BaseModel):
     @classmethod
     def check_font(cls, v):
         return validate_font_family(v)
+
+    @model_validator(mode="after")
+    def validate_position_format(self):
+        if self.type == "date":
+            if not isinstance(self.position, list):
+                raise ValueError(f"當 type 為 'date' 時，position 應為座標列表")
+            if len(self.position) != 3:
+                raise ValueError(f"日期欄位 position 必須為三個座標 (年、月、日)，目前為 {len(self.position)}")
+        else:
+            if not isinstance(self.position, tuple):
+                raise ValueError(f"當 type 為 '{self.type}' 時，position 應為單一座標")
+        return self
 
 # 背景圖格式驗證
 class Background(BaseModel):
@@ -63,12 +72,14 @@ class PhotoConfig(BaseModel):
     """
     照片設定模型
 
+    :param enabled: 是否啟用圖片欄位
     :param folder: 照片資料夾路徑
     :param position: 照片位置 (x, y)
     :param size: 照片大小 (寬, 高)
     :param border_radius: 照片邊框半徑
     :raises ValueError: 如果資料夾為空，則拋出此錯誤
     """
+    enabled: bool
     folder: DirectoryPath  # 路徑若不存在，Invalid
     position: Tuple[int, int]
     size: Tuple[int, int]

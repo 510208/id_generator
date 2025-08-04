@@ -1,13 +1,13 @@
 # 基於模板描述檔的證件生成引擎
 # Template-based Document Generation Engine
 
+from datetime import datetime
 import os
 import csv
 from pathlib import Path
-from typing import Dict, Any, List, Tuple
+from typing import Dict, Any, List, Tuple, Union
 from PIL import Image, ImageDraw, ImageFont
 import logging
-from dataclasses import dataclass
 
 from schema import load_config, DocumentConfig
 from barcode import Code128
@@ -15,34 +15,6 @@ from barcode.writer import ImageWriter
 import io
 
 logger = logging.getLogger(__name__)
-
-@dataclass
-class PersonData:
-    """個人資料數據類別"""
-    name: str
-    name_en: str
-    id_number: str
-    birth_date: str
-    identity: str
-    gender: str
-    domicile: str
-    issue_type: str
-    nationality: str = "諾瓦雷克斯帝國"
-    
-    def to_dict(self) -> Dict[str, Any]:
-        """轉換為字典格式以便模板使用"""
-        return {
-            'name': self.name,
-            'name_en': self.name_en,
-            'id': self.id_number,
-            'id_number': self.id_number,
-            'birth_date': self.birth_date,
-            'identity': self.identity,
-            'gender': self.gender,
-            'domicile': self.domicile,
-            'issue_type': self.issue_type,
-            'nationality': self.nationality,
-        }
 
 class DocumentGenerator:
     """基於模板描述檔的證件生成器"""
@@ -104,6 +76,7 @@ class DocumentGenerator:
             
             # 載入圖片並轉換格式
             barcode_img = Image.open(buffer).convert("RGBA")
+
             return barcode_img
             
         except Exception as e:
@@ -111,14 +84,16 @@ class DocumentGenerator:
             # 如果條碼生成失敗，返回一個空白圖片
             return Image.new("RGBA", (200, 50), (255, 255, 255, 0))
     
-    def _resize_photo_cover(self, photo: Image.Image) -> Image.Image:
+    def _resize_photo_cover(self, photo: Image.Image, size: Union[Tuple[int, int], None] = None) -> Image.Image:
         """
         以 cover 方式縮放照片（類似 CSS background-size: cover）
         縮放照片以填滿目標區域，保持比例並從中心裁切
         """
         # 目標大小
-        target_width = int(self.config.photo.size[0])
-        target_height = int(self.config.photo.size[1])
+        if size is None:
+            size = self.config.photo.size
+        target_width = int(size[0] or self.config.photo.size[0])
+        target_height = int(size[1] or self.config.photo.size[1])
         logger.debug(f"照片目標尺寸: {target_width}x{target_height}")
         
         # 計算裁切比例，選擇較大的比例以填滿目標區域
@@ -160,18 +135,27 @@ class DocumentGenerator:
         
         return rounded_photo
     
-    def _load_photo(self, person_data: PersonData) -> Image.Image:
+    def _sanitize_filename(self, filename: str) -> str:
+        """清理檔案名稱，移除不合法的字符"""
+        import re
+        # 移除不合法的檔案名稱字符
+        filename = re.sub(r'[<>:"/\\|?*]', '_', filename)
+        # 移除多餘的空格
+        filename = filename.strip()
+        return filename
+    
+    def _load_photo(self, csv_row: Dict[str, str]) -> Image.Image:
         """載入個人照片"""
         photo_dir = Path(self.config.photo.folder)
         
         # 嘗試不同的照片檔名格式
         possible_names = [
-            f"{person_data.name}.png",
-            f"{person_data.name}.jpg", 
-            f"{person_data.name}.jpeg",
-            f"{person_data.id_number}.png",
-            f"{person_data.id_number}.jpg",
-            f"{person_data.id_number}.jpeg",
+            f"{csv_row.get('name', '')}.png",
+            f"{csv_row.get('name', '')}.jpg", 
+            f"{csv_row.get('name', '')}.jpeg",
+            f"{csv_row.get('id_number', '')}.png",
+            f"{csv_row.get('id_number', '')}.jpg",
+            f"{csv_row.get('id_number', '')}.jpeg",
         ]
         
         for name in possible_names:
@@ -181,7 +165,7 @@ class DocumentGenerator:
                 return self._resize_photo_cover(photo)
         
         # 如果找不到照片，創建一個預設的佔位圖
-        logger.warning(f"找不到照片: {person_data.name}, 使用預設佔位圖")
+        logger.warning(f"找不到照片: {csv_row.get('name', '')}, 使用預設佔位圖")
         size = (int(self.config.photo.size[0]), int(self.config.photo.size[1]))
         placeholder = Image.new("RGBA", size, (200, 200, 200, 255))
         draw = ImageDraw.Draw(placeholder)
@@ -193,28 +177,26 @@ class DocumentGenerator:
         )
         return placeholder
     
-    def generate_document(self, person_data: PersonData) -> Image.Image:
+    def generate_document(self, csv_row: Dict[str, str]) -> Image.Image:
         """
         根據模板配置生成證件
         
-        :param person_data: 個人資料
+        :param csv_row: CSV 資料行
         :return: 生成的證件圖片
         """
         # 複製背景圖片
         document = self.background_image.copy()
         draw = ImageDraw.Draw(document)
         
-        # 取得人員資料字典
-        data_dict = person_data.to_dict()
-        
         # 加入照片 - 位置可以使用浮點數
-        photo = self._load_photo(person_data)
-        document.paste(photo, self.config.photo.position, photo)
+        if self.config.photo.enabled: 
+            photo = self._load_photo(csv_row)
+            document.paste(photo, self.config.photo.position, photo)
         
         # 處理每個欄位
         for field in self.config.fields:
             try:
-                self._render_field(document, draw, field, data_dict)
+                self._render_field(document, draw, field, csv_row)
             except Exception as e:
                 logger.error(f"渲染欄位失敗 {field.key}: {e}")
                 continue
@@ -231,6 +213,8 @@ class DocumentGenerator:
         
         if field.type == "barcode":
             self._render_barcode(document, field, str(data_value))
+        elif field.type == "date":
+            self._render_date(document, draw, field, data_value)
         else:
             self._render_text(draw, field, str(data_value))
     
@@ -243,7 +227,17 @@ class DocumentGenerator:
         
         # 取得顏色
         color = field.font_color or "#000000"
-        
+
+        # 格式化字串
+        # 如果text裡面有任何以大括號包裹的字串，就視為格式化字串
+        # 將字串中的大括號視為CSV欄位名，並替換為對應的資料
+        if "{" in text and "}" in text:
+            try:
+                text = text.format(**field.data_dict)
+            except KeyError as e:
+                logger.error(f"格式化字串失敗: {text}，缺少欄位 {e}")
+                return
+
         # 直接使用浮點數位置 - PIL 支援浮點數位置
         draw.text(
             field.position,
@@ -260,33 +254,95 @@ class DocumentGenerator:
         # 如果有指定大小，調整條碼大小 - 這裡需要整數
         if field.size:
             # 只有大小需要轉換為整數
+            logging.debug(f"圖片大小：{int(field.size[0])}, {int(field.size[1])}")
             size = (int(field.size[0]), int(field.size[1]))
             barcode_img = barcode_img.resize(size, Image.Resampling.LANCZOS)
+            barcode_img = self._resize_photo_cover(barcode_img, size)
+
+        # 將位置元組轉換成整數
+        int_pos = (int(field.position[0]), int(field.position[1]))
         
         # 位置可以使用浮點數
-        document.paste(barcode_img, field.position, barcode_img)
+        document.paste(barcode_img, int_pos, barcode_img)
 
-    def save_document(self, document: Image.Image, person_data: PersonData) -> str:
+    def _render_date(self, document: Image.Image, draw: ImageDraw.Draw, field, date_str: str):
+        """渲染日期欄位"""
+        # 解析日期字串
+        try:
+            date_obj = datetime.strptime(date_str, "%Y/%m/%d")
+            formatted_date = date_obj.strftime(field.date_format or "%Y/%m/%d")
+        except ValueError:
+            logger.error(f"無法解析日期: {date_str}，請確保來源的日期格式正確（YYYY/MM/DD）")
+            formatted_date = date_str
+
+        # 將日期字串分割成含有年月日的陣列
+        date_arr = formatted_date.split('/')
+
+        # 處理字體
+        font_size = field.font_size or 16
+        font_family = field.font_family or "arial"
+        font = self._get_font(font_family, font_size)
+
+        # 依照field.position渲染日期，field.position將為一個List，前三項分別為年月日的位置
+        if isinstance(field.position, list) and len(field.position) == 3:
+            for i, part in zip(field.position, date_arr):
+                # 渲染日期的每個部分
+                if not isinstance(i, tuple) or len(i) != 2:
+                    logger.error(f"日期欄位 {field.key} 的 position 格式錯誤，應為三個座標 (年、月、日)，目前為 {i}")
+                    return
+                
+                draw.text(i, part, fill=field.font_color or "#000000", font=font)
+        else:
+            logger.error(f"日期欄位 {field.key} 的 position 格式錯誤，應為三個座標")
+            return
+
+    def save_document(self, document: Image.Image, csv_row: Dict[str, str]) -> str:
         """
         儲存證件檔案
         
         :param document: 證件圖片
-        :param person_data: 個人資料
+        :param csv_row: CSV 資料行
         :return: 儲存的檔案路徑
         """
         # 建立輸出目錄
-        output_path = self.output_dir / self.config.output.save_to.format(**person_data.to_dict())
+        output_path = self.output_dir / self.config.output.save_to.format(**csv_row)
         output_path.mkdir(parents=True, exist_ok=True)
         
         # 建立檔案名稱
-        filename = self.config.output.output_file_format.format(**person_data.to_dict())
+        filename = self.config.output.output_file_format.format(**csv_row)
+        filename = self._sanitize_filename(filename)
+        
+        # 檢查檔案副檔名
+        if not any(filename.lower().endswith(ext) for ext in ['.png', '.jpg', '.jpeg', '.bmp', '.tiff']):
+            # 如果沒有副檔名，預設使用 .png
+            filename += '.png'
+            logger.warning(f"檔案名稱沒有副檔名，自動添加 .png: {filename}")
+        
         file_path = output_path / filename
         
-        # 儲存檔案
-        document.save(file_path, dpi=(self.config.output.dpi, self.config.output.dpi))
-        
-        logger.info(f"證件已儲存: {file_path}")
-        return str(file_path)
+        try:
+            # 根據副檔名決定儲存格式
+            if filename.lower().endswith('.png'):
+                document.save(file_path, 'PNG', dpi=(self.config.output.dpi, self.config.output.dpi))
+            elif filename.lower().endswith(('.jpg', '.jpeg')):
+                # JPEG 不支援透明度，需要轉換為 RGB
+                rgb_document = Image.new('RGB', document.size, (255, 255, 255))
+                rgb_document.paste(document, mask=document.split()[-1] if document.mode == 'RGBA' else None)
+                rgb_document.save(file_path, 'JPEG', dpi=(self.config.output.dpi, self.config.output.dpi), quality=95)
+            else:
+                # 其他格式使用預設方式
+                document.save(file_path, dpi=(self.config.output.dpi, self.config.output.dpi))
+            
+            logger.info(f"證件已儲存: {file_path}")
+            return str(file_path)
+            
+        except Exception as e:
+            logger.error(f"儲存檔案失敗 {file_path}: {e}")
+            # 嘗試用 PNG 格式儲存
+            fallback_path = file_path.with_suffix('.png')
+            document.save(fallback_path, 'PNG', dpi=(self.config.output.dpi, self.config.output.dpi))
+            logger.info(f"使用 PNG 格式儲存: {fallback_path}")
+            return str(fallback_path)
     
     def process_batch(self, csv_data: List[Dict[str, str]]) -> List[Tuple[str, bool, str]]:
         """
@@ -299,26 +355,13 @@ class DocumentGenerator:
         
         for row in csv_data:
             try:
-                # 建立 PersonData 物件
-                person_data = PersonData(
-                    name=row.get('name', ''),
-                    name_en=row.get('name_en', ''),
-                    id_number=row.get('id_number', ''),
-                    birth_date=row.get('birth_date', ''),
-                    identity=row.get('identity', ''),
-                    gender=row.get('gender', ''),
-                    domicile=row.get('domicile', ''),
-                    issue_type=row.get('issue_type', ''),
-                    nationality=row.get('nationality', '諾瓦雷克斯帝國')
-                )
-                
                 # 生成證件
-                document = self.generate_document(person_data)
+                document = self.generate_document(row)
                 
                 # 儲存證件
-                file_path = self.save_document(document, person_data)
+                file_path = self.save_document(document, row)
                 
-                results.append((person_data.id_number, True, ""))
+                results.append((row.get('id_number', 'unknown'), True, ""))
                 
             except Exception as e:
                 error_msg = f"處理失敗: {str(e)}"
