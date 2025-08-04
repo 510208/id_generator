@@ -128,14 +128,14 @@ def print_summary_table(results, template_name):
         row = [id_number]
         
         if success:
-            row.append(colored("✓ 成功", "green"))
+            row.append(colored("✓ Success", "green"))
         else:
-            row.append(colored(f"✗ 失敗: {error_msg}", "red"))
+            row.append(colored(f"✗ Failed: {error_msg}", "red"))
         
         table_data.append(row)
     
     # 輸出表格
-    headers = ["身分證號碼", f"{template_name} 狀態"]
+    headers = ["id_number", f"{template_name} Status"]
     click.echo("\n" + "="*80)
     click.echo(colored(f"{template_name} 批次處理結果總結", "yellow", attrs=["bold"]))
     click.echo("="*80)
@@ -146,9 +146,9 @@ def print_summary_table(results, template_name):
         # 統計資訊
         total_count = len(results)
         success_count = sum(1 for _, success, _ in results if success)
-        click.echo(f"\n{template_name}: {colored(f'{success_count}/{total_count}', 'green' if success_count == total_count else 'yellow')} 成功")
+        click.echo(f"\n{template_name}: {colored(f'{success_count}/{total_count}', 'green' if success_count == total_count else 'yellow')} Success")
     else:
-        click.echo(colored("沒有處理任何資料", "yellow"))
+        click.echo(colored("No Data was proceed", "yellow"))
     
     click.echo("="*80)
 
