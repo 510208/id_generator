@@ -2,13 +2,11 @@
 id: "sample-passport" # 證件唯一ID（可作為輸出檔名）
 country: "和平共和國" # 發行國名稱
 version: "1.0" # 配置版本
-layout: "horizontal" # 版面配置: horizontal | vertical | booklet
 
 # 背景設計與樣式
 background:
-  image: "assets/passport-bg.png" # 背景圖檔路徑
+  image: "passport-bg.png" # 背景圖檔路徑（根目錄下/templates資料夾下的檔名）
   color: "#f4f4f4" # 預設底色（可為 backup）
-  margin: 20 # 頁面邊距（單位 px）
 
 # 欄位定義區（字段與資料綁定）
 fields:
@@ -44,16 +42,15 @@ fields:
 
 # 持證人照片
 photo:
-  folder: "./photos" # 照片路徑
+  folder: "/photos" # 照片路徑
   position: [50, 50] # 照片位置（x, y）單位
   size: [100, 100] # 照片大小（寬, 高）
-  border_radius: 10 # 照片圓角半徑
+  border_radius: 10 # 照片圓角半徑（可選）
 
 # 輸出格式
 output:
-  format: "PNG" # PNG | PDF | SVG
-  dpi: 300
-  save_to: "/output/" # 輸出目錄
+  dpi: 300 # 輸出解析度
+  save_to: "{id}" # 輸出目錄名稱（此設定將輸出於/output/{id}）
   output_file_format:
     "passport-{id}.png" # 輸出檔案格式，{id} 會被替換為證件唯一ID
     # 可以使用如 {name} 等佔位符（應為CSV檔案的鍵名）
