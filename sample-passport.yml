@@ -1,6 +1,6 @@
-# 證件基本資料
+# 證件資料
 id: "sample-passport" # 證件唯一ID（可作為輸出檔名）
-country: "自由共和國" # 發行國名稱
+country: "和平共和國" # 發行國名稱
 version: "1.0" # 配置版本
 layout: "horizontal" # 版面配置: horizontal | vertical | booklet
 
@@ -12,60 +12,51 @@ background:
 
 # 欄位定義區（字段與資料綁定）
 fields:
-  - key: "name"
-    label: "姓名"
-    position: [100, 150] # x, y 座標
-    font_size: 18
-    font_color: "#000"
-    font_family: "Noto Sans TC"
-    required: true
-    data_path: "user.name"
+  - key: "name" # 欄位名稱
+    type: "text" # 欄位類型: text | number | date | barcode
+    position: [100, 150] # 欄位在模版圖檔上的位置（x, y）單位
+    font_size: 18 # 字體大小
+    font_color: "#000" # 字體顏色
+    font_family: "Noto Sans TC" # 字體家族
+    data_path: "name" # 欄位對應於繫結的資料（一般為CSV結構）的鍵名
 
-  - key: "nationality"
-    label: "國籍"
-    position: [100, 200]
-    font_size: 14
-    data_path: "user.nationality"
+  - key: "nationality" # 欄位名稱
+    type: "text" # 欄位類型: text | number | date | barcode
+    position: [100, 200] # 欄位在模版圖檔上的位置（x, y）單位
+    font_size: 14 # 字體大小
+    font_color: "#000" # 字體顏色
+    font_family: "Noto Sans TC" # 字體家族
+    data_path: "nationality"
 
-  - key: "id_number"
-    label: "證件號碼"
+  - key: "id_number" # 欄位名稱
+    type: "text" # 欄位類型: text | number | date | barcode
     position: [300, 150]
     font_size: 14
-    font_color: "#444"
-    data_path: "document.id"
+    font_color: "#000" # 字體顏色
+    font_family: "Noto Sans TC" # 字體家族
+    data_path: "id"
 
-  - key: "photo"
-    type: "image"
-    position: [500, 100]
-    size: [120, 160]
-    data_path: "user.photo"
+  - key: "barcode" # 欄位名稱
+    type: "barcode" # 欄位類型: text | number | date | barcode
+    position: [500, 300] # 欄位在模版圖檔上的位置（x, y）單位
+    size: [200, 50] # 條碼大小（寬, 高）
+    data_path: "id" # 條碼數據來源（暫未實現校驗碼功能）
 
-# 靜態元素（如章、簽章、LOGO）
-overlays:
-  - type: "image"
-    src: "assets/seal.png"
-    position: [600, 300]
-    size: [80, 80]
-    opacity: 0.5
-
-  - type: "text"
-    content: "REPUBLIC OF LIBERTY"
-    position: [100, 50]
-    font_size: 12
-    font_style: italic
-    font_color: "#999"
-
-# 安全元素或特效（可選）
-security:
-  hologram: true
-  watermark:
-    text: "MICRONATION"
-    opacity: 0.1
-    repeat: true
+# 持證人照片
+photo:
+  folder: "./photos" # 照片路徑
+  position: [50, 50] # 照片位置（x, y）單位
+  size: [100, 100] # 照片大小（寬, 高）
+  border_radius: 10 # 照片圓角半徑
 
 # 輸出格式
 output:
   format: "PNG" # PNG | PDF | SVG
   dpi: 300
-  save_to: "output/" # 輸出目錄
-  filename_format: "{user.name}_{document.id}.png"
+  save_to: "/output/" # 輸出目錄
+  output_file_format:
+    "passport-{id}.png" # 輸出檔案格式，{id} 會被替換為證件唯一ID
+    # 可以使用如 {name} 等佔位符（應為CSV檔案的鍵名）
+
+  other_file: # 其他應該共同被打包的檔案
+    - "/resources/passport_pages/*.png"
