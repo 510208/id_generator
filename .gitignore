@@ -53,3 +53,5 @@ main.dist/
 # Data files that might contain sensitive information
 data/*.csv
 !data/sample.csv
+
+/*.yml
