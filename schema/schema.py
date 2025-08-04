@@ -1,34 +1,27 @@
-from pydantic import BaseModel, Field, field_validator
-from typing import Optional, Literal, Tuple
-import re
 from pathlib import Path
-import matplotlib.font_manager as fm
+from typing import List, Literal, Optional, Tuple
+from pydantic import BaseModel, DirectoryPath, field_validator
 
-def is_hex_color(s: str) -> bool:
-    return bool(re.fullmatch(r"#([0-9a-fA-F]{6})", s.strip()))
-
-def rgba_to_hex(rgba: str) -> str:
-    match = re.fullmatch(r"rgba?\((\d{1,3}), *(\d{1,3}), *(\d{1,3})(, *[\d.]+)?\)", rgba)
-    if not match:
-        raise ValueError(f"無法解析 color: {rgba}")
-    r, g, b = [int(match.group(i)) for i in range(1, 4)]
-    return "#{:02x}{:02x}{:02x}".format(r, g, b)
-
-def cmyk_to_hex(cmyk: str) -> str:
-    match = re.fullmatch(r"cmyk\((\d{1,3})%, *(\d{1,3})%, *(\d{1,3})%, *(\d{1,3})%\)", cmyk)
-    if not match:
-        raise ValueError(f"無法解析 color: {cmyk}")
-    c, m, y, k = [int(match.group(i)) / 100 for i in range(1, 5)]
-    r = 255 * (1 - c) * (1 - k)
-    g = 255 * (1 - m) * (1 - k)
-    b = 255 * (1 - y) * (1 - k)
-    return "#{:02x}{:02x}{:02x}".format(int(r), int(g), int(b))
-
+from .validators import validate_color_format, validate_font_family
 
 class FieldDefinition(BaseModel):
+    """
+    欄位定義模型
+
+    :param key: 欄位鍵
+    :param type: 欄位類型 (text, number, date, barcode)
+    :param position: 欄位位置 (x, y)
+    :param font_size: 字體大小
+    :param font_color: 字體顏色
+    :param font_family: 字體名稱
+    :param size: 條碼大小 (寬, 高)
+    :param data_path: 資料路徑 (對應 CSV 欄位)
+    :raises ValueError: 如果字體顏色格式不正確，則拋出此錯誤
+    :raises ValueError: 如果字體名稱不正確，則拋出此錯誤
+    """
     key: str
     type: Literal["text", "number", "date", "barcode"]
-    position: Tuple[int, int]
+    position: Tuple[float, float]
     font_size: Optional[int] = None
     font_color: Optional[str] = None
     font_family: Optional[str] = None
@@ -37,28 +30,87 @@ class FieldDefinition(BaseModel):
 
     @field_validator("font_color", mode="after")
     @classmethod
-    def validate_color(cls, v: Optional[str]) -> Optional[str]:
-        if v is None:
-            return v
-        if is_hex_color(v):
-            return v
-        try:
-            return rgba_to_hex(v)
-        except ValueError:
-            pass
-        try:
-            return cmyk_to_hex(v)
-        except ValueError:
-            pass
-        raise ValueError(f"無法辨識字體顏色格式：{v}")
+    def check_color(cls, v):
+        return validate_color_format(v)
 
     @field_validator("font_family", mode="after")
     @classmethod
-    def validate_font(cls, v: Optional[str]) -> Optional[str]:
-        if v is None:
-            return v
-        font_names = {f.name for f in fm.fontManager.ttflist}
-        if v not in font_names:
-            available = sorted(list(font_names))[:5]
-            raise ValueError(f"系統未安裝字體 '{v}'，請確認名稱是否正確，例如：{available}")
+    def check_font(cls, v):
+        return validate_font_family(v)
+
+# 背景圖格式驗證
+class Background(BaseModel):
+    """
+    背景設定模型
+
+    :param image: 背景圖片路徑
+    :param color: 背景顏色
+    :raises ValueError: 如果圖片檔案不存在，則拋出此錯誤
+    """
+
+    image: str  # 只存檔名，相對於 templates/
+    color: str
+
+    @field_validator("image", mode="after")
+    @classmethod
+    def check_image_file_exists(cls, v: str) -> str:
+        path = Path("templates") / v
+        if not path.is_file():
+            raise ValueError(f"background.image 檔案不存在：{path}")
         return v
+
+class PhotoConfig(BaseModel):
+    """
+    照片設定模型
+
+    :param folder: 照片資料夾路徑
+    :param position: 照片位置 (x, y)
+    :param size: 照片大小 (寬, 高)
+    :param border_radius: 照片邊框半徑
+    :raises ValueError: 如果資料夾為空，則拋出此錯誤
+    """
+    folder: DirectoryPath  # 路徑若不存在，Invalid
+    position: Tuple[int, int]
+    size: Tuple[int, int]
+    border_radius: Optional[int] = 0
+
+    @field_validator("folder", mode="after")
+    @classmethod
+    def check_folder_not_empty(cls, v: Path) -> Path:
+        if not any(v.iterdir()):
+            raise ValueError(f"photo.folder 資料夾存在，但為空：{v}")
+        return v
+
+class OutputConfig(BaseModel):
+    """
+    輸出設定模型
+
+    :param dpi: 圖片解析度
+    :param save_to: 儲存路徑格式
+    :param output_file_format: 輸出檔案格式
+    :param other_file: 其他檔案模式列表
+    """
+    dpi: int = 300
+    save_to: str
+    output_file_format: str
+    other_file: Optional[List[str]] = []
+
+class DocumentConfig(BaseModel):
+    """
+    模版描述檔格式的模型
+
+    :param id: 模版 ID
+    :param country: 國家或地區
+    :param version: 模版版本
+    :param background: 背景設定
+    :param fields: 欄位定義列表
+    :param photo: 照片設定
+    :param output: 輸出設定
+    """
+    id: str
+    country: str
+    version: str
+    background: Background
+    fields: List[FieldDefinition]
+    photo: PhotoConfig
+    output: OutputConfig

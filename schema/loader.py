@@ -4,6 +4,12 @@ from .schema import DocumentConfig
 
 
 def load_config(path: str | Path) -> DocumentConfig:
+    """
+    載入 YAML 配置檔並轉換為 DocumentConfig 模型
+
+    :param path: 配置檔路徑
+    :return: DocumentConfig 實例
+    """
     path = Path(path)
     if not path.exists():
         raise FileNotFoundError(f"配置檔不存在：{path}")
